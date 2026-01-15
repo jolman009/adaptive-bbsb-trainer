@@ -14,7 +14,7 @@ import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DrillPlayer } from '@/components/DrillPlayer';
 import { FilterPanel } from '@/components/FilterPanel';
-import { ScenarioV2 } from '@/types/scenario';
+import { ScenarioV2, Sport, Level, Category, Position } from '@/types/scenario';
 import { ScenarioFilter, createEmptyFilter } from '@/types/scenarioFilter';
 import { DrillSession, createDrillSession } from '@/types/drillSession';
 import { pickNextScenario, applyResult, getDrillStats } from '@/utils/drillEngine';
@@ -58,7 +58,7 @@ export const AdaptiveDrillPage: React.FC = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    void navigate('/login');
   };
 
   // Get filtered scenarios based on current filter
@@ -72,16 +72,20 @@ export const AdaptiveDrillPage: React.FC = () => {
 
     const savedFilter = loadFilterFromLocalStorage();
     setFilter(savedFilter);
-
-    // Pick first scenario from filtered list
-    const next = pickNextScenario(filteredScenarios, activeSession);
-    if (next) {
-      setCurrentScenario(next);
-      setNoScenariosAvailable(false);
-    } else {
-      setNoScenariosAvailable(true);
-    }
   }, []);
+
+  // Pick first scenario when session or filtered scenarios change
+  useEffect(() => {
+    if (session) {
+      const next = pickNextScenario(filteredScenarios, session);
+      if (next) {
+        setCurrentScenario(next);
+        setNoScenariosAvailable(false);
+      } else {
+        setNoScenariosAvailable(true);
+      }
+    }
+  }, [session, filteredScenarios]);
 
   // Save session to localStorage whenever it changes
   useEffect(() => {
@@ -92,7 +96,7 @@ export const AdaptiveDrillPage: React.FC = () => {
 
   // Save filter to localStorage whenever it changes and pick next scenario
   useEffect(() => {
-    saveFilterToLocalStorage(filter);
+    void saveFilterToLocalStorage(filter);
 
     // When filter changes, pick next scenario from filtered list
     if (session) {
@@ -146,10 +150,10 @@ export const AdaptiveDrillPage: React.FC = () => {
   const stats = session ? getDrillStats(filteredScenarios, session) : { correctRate: 0, scenariosSeen: 0, totalAttempts: 0, averageEase: 1.3, averageInterval: 0 };
 
   // Get unique values for filter dropdowns
-  const sports = getUniqueValues(STARTER_DATASET.scenarios, 'sport');
-  const levels = getUniqueValues(STARTER_DATASET.scenarios, 'level');
-  const categories = getUniqueValues(STARTER_DATASET.scenarios, 'category');
-  const positions = getUniqueValues(STARTER_DATASET.scenarios, 'position');
+  const sports = getUniqueValues(STARTER_DATASET.scenarios, 'sport') as Sport[];
+  const levels = getUniqueValues(STARTER_DATASET.scenarios, 'level') as Level[];
+  const categories = getUniqueValues(STARTER_DATASET.scenarios, 'category') as Category[];
+  const positions = getUniqueValues(STARTER_DATASET.scenarios, 'position') as Position[];
 
   const handleFilterChange = (newFilter: ScenarioFilter) => {
     setFilter(newFilter);
@@ -195,10 +199,10 @@ export const AdaptiveDrillPage: React.FC = () => {
         <FilterPanel
           filter={filter}
           onFilterChange={handleFilterChange}
-          sports={sports as any}
-          levels={levels as any}
-          categories={categories as any}
-          positions={positions as any}
+          sports={sports}
+          levels={levels}
+          categories={categories}
+          positions={positions}
           scenarioCount={filteredScenarios.length}
         />
 
