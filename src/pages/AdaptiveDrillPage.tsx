@@ -11,15 +11,22 @@ import {
   Alert,
 } from '@mui/material';
 import { DrillPlayer } from '@/components/DrillPlayer';
+import { FilterPanel } from '@/components/FilterPanel';
 import { ScenarioV2 } from '@/types/scenario';
+import { ScenarioFilter, createEmptyFilter } from '@/types/scenarioFilter';
 import { DrillSession, createDrillSession } from '@/types/drillSession';
 import { pickNextScenario, applyResult, getDrillStats } from '@/utils/drillEngine';
+import { filterScenarios, getUniqueValues } from '@/utils/filterScenarios';
 import { STARTER_DATASET } from '@/data/starterDataset';
 import {
   saveSessionToLocalStorage,
   loadSessionFromLocalStorage,
   clearSessionFromLocalStorage,
 } from '@/utils/sessionPersistence';
+import {
+  saveFilterToLocalStorage,
+  loadFilterFromLocalStorage,
+} from '@/utils/filterPersistence';
 
 /**
  * AdaptiveDrillPage Container
@@ -30,8 +37,10 @@ import {
  * 3. Answer processing via applyResult()
  * 4. Stats display (correctRate, averageInterval, scenariosSeen)
  * 5. Session reset
+ * 6. Scenario filtering (M5: sport, level, category, position)
  *
- * In M4, this will persist to localStorage.
+ * In M4, session persists to localStorage.
+ * In M5, filter preferences persist to localStorage.
  * In M7, this will use Supabase backend.
  */
 export const AdaptiveDrillPage: React.FC = () => {
@@ -39,15 +48,22 @@ export const AdaptiveDrillPage: React.FC = () => {
   const [currentScenario, setCurrentScenario] = useState<ScenarioV2 | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [noScenariosAvailable, setNoScenariosAvailable] = useState(false);
+  const [filter, setFilter] = useState<ScenarioFilter>(createEmptyFilter());
 
-  // Load session from localStorage on mount
+  // Get filtered scenarios based on current filter
+  const filteredScenarios = filterScenarios(STARTER_DATASET.scenarios, filter);
+
+  // Load session and filter preferences from localStorage on mount
   useEffect(() => {
     const saved = loadSessionFromLocalStorage();
     const activeSession = saved || createDrillSession('adaptive-session');
     setSession(activeSession);
 
-    // Pick first scenario
-    const next = pickNextScenario(STARTER_DATASET.scenarios, activeSession);
+    const savedFilter = loadFilterFromLocalStorage();
+    setFilter(savedFilter);
+
+    // Pick first scenario from filtered list
+    const next = pickNextScenario(filteredScenarios, activeSession);
     if (next) {
       setCurrentScenario(next);
       setNoScenariosAvailable(false);
@@ -63,6 +79,22 @@ export const AdaptiveDrillPage: React.FC = () => {
     }
   }, [session]);
 
+  // Save filter to localStorage whenever it changes and pick next scenario
+  useEffect(() => {
+    saveFilterToLocalStorage(filter);
+
+    // When filter changes, pick next scenario from filtered list
+    if (session) {
+      const next = pickNextScenario(filteredScenarios, session);
+      if (next) {
+        setCurrentScenario(next);
+        setNoScenariosAvailable(false);
+      } else {
+        setNoScenariosAvailable(true);
+      }
+    }
+  }, [filter, filteredScenarios, session]);
+
   const handleAnswer = (quality: 'best' | 'ok' | 'bad' | 'timeout') => {
     if (!currentScenario || !session) return;
 
@@ -76,8 +108,8 @@ export const AdaptiveDrillPage: React.FC = () => {
       // Update session state (this triggers save via useEffect)
       setSession({ ...session });
 
-      // Pick next scenario
-      const next = pickNextScenario(STARTER_DATASET.scenarios, session);
+      // Pick next scenario from filtered list
+      const next = pickNextScenario(filteredScenarios, session);
       if (next) {
         setCurrentScenario(next);
         setNoScenariosAvailable(false);
@@ -93,14 +125,24 @@ export const AdaptiveDrillPage: React.FC = () => {
     clearSessionFromLocalStorage();
     const newSession = createDrillSession('adaptive-session');
     setSession(newSession);
-    const next = pickNextScenario(STARTER_DATASET.scenarios, newSession);
+    const next = pickNextScenario(filteredScenarios, newSession);
     if (next) {
       setCurrentScenario(next);
       setNoScenariosAvailable(false);
     }
   };
 
-  const stats = session ? getDrillStats(STARTER_DATASET.scenarios, session) : { correctRate: 0, scenariosSeen: 0, totalAttempts: 0, averageEase: 1.3, averageInterval: 0 };
+  const stats = session ? getDrillStats(filteredScenarios, session) : { correctRate: 0, scenariosSeen: 0, totalAttempts: 0, averageEase: 1.3, averageInterval: 0 };
+
+  // Get unique values for filter dropdowns
+  const sports = getUniqueValues(STARTER_DATASET.scenarios, 'sport');
+  const levels = getUniqueValues(STARTER_DATASET.scenarios, 'level');
+  const categories = getUniqueValues(STARTER_DATASET.scenarios, 'category');
+  const positions = getUniqueValues(STARTER_DATASET.scenarios, 'position');
+
+  const handleFilterChange = (newFilter: ScenarioFilter) => {
+    setFilter(newFilter);
+  };
 
   return (
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', py: 4 }}>
@@ -114,6 +156,16 @@ export const AdaptiveDrillPage: React.FC = () => {
             Improve your in-game decision-making with spaced repetition drills.
           </Typography>
         </Box>
+        {/* Filter Panel */}
+        <FilterPanel
+          filter={filter}
+          onFilterChange={handleFilterChange}
+          sports={sports as any}
+          levels={levels as any}
+          categories={categories as any}
+          positions={positions as any}
+          scenarioCount={filteredScenarios.length}
+        />
 
         {/* Session Stats Card */}
         <Card sx={{ mb: 4 }}>
