@@ -1,6 +1,13 @@
+import { useEffect } from 'react';
 import { Container, Box, Typography, Button } from '@mui/material';
+import { initializeScenarioData } from '@utils/initializeScenarioData';
 
 function App(): JSX.Element {
+  useEffect(() => {
+    // Validate scenario dataset on app load
+    initializeScenarioData();
+  }, []);
+
   return (
     <Container maxWidth="md">
       <Box
