@@ -15,6 +15,11 @@ import { ScenarioV2 } from '@/types/scenario';
 import { DrillSession, createDrillSession } from '@/types/drillSession';
 import { pickNextScenario, applyResult, getDrillStats } from '@/utils/drillEngine';
 import { STARTER_DATASET } from '@/data/starterDataset';
+import {
+  saveSessionToLocalStorage,
+  loadSessionFromLocalStorage,
+  clearSessionFromLocalStorage,
+} from '@/utils/sessionPersistence';
 
 /**
  * AdaptiveDrillPage Container
@@ -30,24 +35,36 @@ import { STARTER_DATASET } from '@/data/starterDataset';
  * In M7, this will use Supabase backend.
  */
 export const AdaptiveDrillPage: React.FC = () => {
-  const [session, setSession] = useState<DrillSession>(createDrillSession('adaptive-session'));
+  const [session, setSession] = useState<DrillSession | null>(null);
   const [currentScenario, setCurrentScenario] = useState<ScenarioV2 | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [noScenariosAvailable, setNoScenariosAvailable] = useState(false);
 
-  // Initialize with first scenario
+  // Load session from localStorage on mount
   useEffect(() => {
-    const next = pickNextScenario(STARTER_DATASET.scenarios, session);
+    const saved = loadSessionFromLocalStorage();
+    const activeSession = saved || createDrillSession('adaptive-session');
+    setSession(activeSession);
+
+    // Pick first scenario
+    const next = pickNextScenario(STARTER_DATASET.scenarios, activeSession);
     if (next) {
       setCurrentScenario(next);
       setNoScenariosAvailable(false);
     } else {
       setNoScenariosAvailable(true);
     }
+  }, []);
+
+  // Save session to localStorage whenever it changes
+  useEffect(() => {
+    if (session) {
+      saveSessionToLocalStorage(session);
+    }
   }, [session]);
 
   const handleAnswer = (quality: 'best' | 'ok' | 'bad' | 'timeout') => {
-    if (!currentScenario) return;
+    if (!currentScenario || !session) return;
 
     setIsLoading(true);
 
@@ -55,6 +72,9 @@ export const AdaptiveDrillPage: React.FC = () => {
     setTimeout(() => {
       // Apply result and update session
       applyResult(session, currentScenario.id, quality);
+
+      // Update session state (this triggers save via useEffect)
+      setSession({ ...session });
 
       // Pick next scenario
       const next = pickNextScenario(STARTER_DATASET.scenarios, session);
@@ -70,15 +90,17 @@ export const AdaptiveDrillPage: React.FC = () => {
   };
 
   const handleResetSession = () => {
-    setSession(createDrillSession('adaptive-session'));
-    const next = pickNextScenario(STARTER_DATASET.scenarios, createDrillSession('adaptive-session'));
+    clearSessionFromLocalStorage();
+    const newSession = createDrillSession('adaptive-session');
+    setSession(newSession);
+    const next = pickNextScenario(STARTER_DATASET.scenarios, newSession);
     if (next) {
       setCurrentScenario(next);
       setNoScenariosAvailable(false);
     }
   };
 
-  const stats = getDrillStats(STARTER_DATASET.scenarios, session);
+  const stats = session ? getDrillStats(STARTER_DATASET.scenarios, session) : { correctRate: 0, scenariosSeen: 0, totalAttempts: 0, averageEase: 1.3, averageInterval: 0 };
 
   return (
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', py: 4 }}>
