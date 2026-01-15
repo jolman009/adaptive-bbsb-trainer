@@ -1,5 +1,5 @@
 import { validateScenarioPack, checkScenarioPackQuality } from '@utils/validateScenarioPack';
-import { STARTER_DATASET } from '@data/starterDataset';
+import { STARTER_DATASET } from '@/data/starterDataset';
 
 /**
  * Validates the starter dataset on app load.
