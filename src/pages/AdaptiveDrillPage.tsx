@@ -10,7 +10,7 @@ import {
   Button,
   Alert,
 } from '@mui/material';
-import { LogOut } from 'lucide-react';
+import { LogOut, Diamond } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DrillPlayer } from '@/components/DrillPlayer';
 import { FilterPanel } from '@/components/FilterPanel';
@@ -166,9 +166,12 @@ export const AdaptiveDrillPage: React.FC = () => {
         <Box sx={{ mb: 4 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
             <Box>
-              <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-                Adaptive Decision Trainer
-              </Typography>
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+                <Diamond size={32} color="#1976d2" strokeWidth={2.5} />
+                <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                  Diamond IQ
+                </Typography>
+              </Stack>
               <Typography variant="body1" color="textSecondary">
                 Improve your in-game decision-making with spaced repetition drills.
               </Typography>

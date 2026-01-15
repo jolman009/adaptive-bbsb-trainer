@@ -12,6 +12,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { Diamond } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginCredentials } from '@/types/auth';
 
@@ -51,12 +52,14 @@ export const LoginPage: React.FC = () => {
   return (
     <Box
       sx={{
-        bgcolor: 'background.default',
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         py: 4,
+        bgcolor: '#f0f4f8',
+        backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
+        backgroundSize: '32px 32px',
       }}
     >
       <Container maxWidth="sm">
@@ -64,9 +67,24 @@ export const LoginPage: React.FC = () => {
           <CardContent sx={{ p: 4 }}>
             {/* Header */}
             <Stack spacing={1} sx={{ mb: 3 }}>
-              <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                Adaptive Decision Trainer
-              </Typography>
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    animation: 'pulse 3s infinite ease-in-out',
+                    '@keyframes pulse': {
+                      '0%': { transform: 'scale(1)' },
+                      '50%': { transform: 'scale(1.1)' },
+                      '100%': { transform: 'scale(1)' },
+                    },
+                  }}
+                >
+                  <Diamond size={32} color="#1976d2" strokeWidth={2.5} />
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                  Diamond IQ
+                </Typography>
+              </Stack>
               <Typography variant="body2" color="textSecondary">
                 Sign in to start drilling
               </Typography>

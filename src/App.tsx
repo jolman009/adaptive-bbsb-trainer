@@ -8,6 +8,8 @@ import { AdaptiveDrillPage } from '@/pages/AdaptiveDrillPage';
 
 function App(): JSX.Element {
   useEffect(() => {
+    // Set application title
+    document.title = 'Diamond IQ';
     // Validate scenario dataset on app load
     initializeScenarioData();
   }, []);
