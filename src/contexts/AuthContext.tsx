@@ -93,29 +93,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     if (!isSupabaseConfigured) {
       // Demo mode: load from localStorage
       const savedUser = localStorage.getItem('adaptive-trainer-user');
       if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser) as User;
-          setUser(parsed);
-          setNeedsOnboarding(!parsed.onboardingCompleted);
+          if (isMounted) {
+            setUser(parsed);
+            setNeedsOnboarding(!parsed.onboardingCompleted);
+          }
         } catch {
           localStorage.removeItem('adaptive-trainer-user');
         }
       }
-      setIsLoading(false);
+      if (isMounted) setIsLoading(false);
       return;
     }
 
     // Get initial session and load profile
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!isMounted) return;
       if (session?.user) {
         const userWithProfile = await loadUserProfile(session.user);
-        setUser(userWithProfile);
+        if (isMounted) setUser(userWithProfile);
       }
-      setIsLoading(false);
+      if (isMounted) setIsLoading(false);
+    }).catch((err) => {
+      // Ignore abort errors from unmount
+      if (err?.name !== 'AbortError') {
+        console.error('Session fetch error:', err);
+      }
+      if (isMounted) setIsLoading(false);
     });
 
     // Listen for auth changes
@@ -123,18 +134,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       async (_event: string, session: Session | null) => {
-        if (session?.user) {
-          const userWithProfile = await loadUserProfile(session.user);
-          setUser(userWithProfile);
-        } else {
-          setUser(null);
-          setNeedsOnboarding(false);
+        if (!isMounted) return;
+        try {
+          if (session?.user) {
+            const userWithProfile = await loadUserProfile(session.user);
+            if (isMounted) setUser(userWithProfile);
+          } else {
+            if (isMounted) {
+              setUser(null);
+              setNeedsOnboarding(false);
+            }
+          }
+        } catch (err) {
+          // Ignore abort errors
+          if (err instanceof Error && err.name !== 'AbortError') {
+            console.error('Auth state change error:', err);
+          }
         }
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (credentials: LoginCredentials): Promise<void> => {
