@@ -2,24 +2,27 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { User, LoginCredentials, SignupCredentials } from '@/types/auth';
+import { getProfile } from '@/services/profileService';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  needsOnboarding: boolean;
   error: string | null;
   login: (credentials: LoginCredentials) => Promise<void>;
   signup: (credentials: SignupCredentials) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Convert Supabase user to app User type
+ * Convert Supabase user to app User type (basic info from auth)
  */
-function mapSupabaseUser(supabaseUser: SupabaseUser): User {
+function mapSupabaseUserBasic(supabaseUser: SupabaseUser): User {
   const metadata = supabaseUser.user_metadata || {};
   return {
     id: supabaseUser.id,
@@ -43,7 +46,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Load full profile data from Supabase and merge with user
+   */
+  const loadUserProfile = async (supabaseUser: SupabaseUser): Promise<User> => {
+    const basicUser = mapSupabaseUserBasic(supabaseUser);
+
+    if (!isSupabaseConfigured) {
+      return basicUser;
+    }
+
+    const profile = await getProfile(supabaseUser.id);
+
+    if (profile) {
+      setNeedsOnboarding(!profile.onboardingCompleted);
+      return {
+        ...basicUser,
+        name: profile.displayName || basicUser.name,
+        avatarUrl: profile.avatarUrl || basicUser.avatarUrl,
+        role: profile.role,
+        onboardingCompleted: profile.onboardingCompleted,
+        organization: profile.organization,
+        isPremium: profile.isPremium,
+      };
+    }
+
+    // New user without profile data - needs onboarding
+    setNeedsOnboarding(true);
+    return basicUser;
+  };
+
+  /**
+   * Refresh profile data (called after onboarding completion)
+   */
+  const refreshProfile = async () => {
+    if (!isSupabaseConfigured) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const updatedUser = await loadUserProfile(session.user);
+      setUser(updatedUser);
+    }
+  };
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -51,7 +98,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const savedUser = localStorage.getItem('adaptive-trainer-user');
       if (savedUser) {
         try {
-          setUser(JSON.parse(savedUser) as User);
+          const parsed = JSON.parse(savedUser) as User;
+          setUser(parsed);
+          setNeedsOnboarding(!parsed.onboardingCompleted);
         } catch {
           localStorage.removeItem('adaptive-trainer-user');
         }
@@ -60,10 +109,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Get initial session and load profile
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
+        const userWithProfile = await loadUserProfile(session.user);
+        setUser(userWithProfile);
       }
       setIsLoading(false);
     });
@@ -72,11 +122,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (_event: string, session: Session | null) => {
+      async (_event: string, session: Session | null) => {
         if (session?.user) {
-          setUser(mapSupabaseUser(session.user));
+          const userWithProfile = await loadUserProfile(session.user);
+          setUser(userWithProfile);
         } else {
           setUser(null);
+          setNeedsOnboarding(false);
         }
         setIsLoading(false);
       }
@@ -117,7 +169,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (data.user) {
-        setUser(mapSupabaseUser(data.user));
+        const userWithProfile = await loadUserProfile(data.user);
+        setUser(userWithProfile);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
@@ -176,7 +229,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (data.user) {
-        setUser(mapSupabaseUser(data.user));
+        const userWithProfile = await loadUserProfile(data.user);
+        setUser(userWithProfile);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Signup failed';
@@ -212,11 +266,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         user,
         isAuthenticated: !!user,
         isLoading,
+        needsOnboarding,
         error,
         login,
         signup,
         logout,
         clearError,
+        refreshProfile,
       }}
     >
       {children}

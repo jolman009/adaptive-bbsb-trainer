@@ -15,6 +15,7 @@ export type Json =
 
 export type TeamRole = 'owner' | 'admin' | 'member';
 export type JoinRequestStatus = 'pending' | 'approved' | 'rejected';
+export type UserRole = 'player' | 'coach' | 'admin';
 
 export interface Database {
   public: {
@@ -26,6 +27,9 @@ export interface Database {
           display_name: string | null;
           avatar_url: string | null;
           is_premium: boolean;
+          role: UserRole | null;
+          onboarding_completed: boolean;
+          organization: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -35,6 +39,9 @@ export interface Database {
           display_name?: string | null;
           avatar_url?: string | null;
           is_premium?: boolean;
+          role?: UserRole | null;
+          onboarding_completed?: boolean;
+          organization?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -44,6 +51,9 @@ export interface Database {
           display_name?: string | null;
           avatar_url?: string | null;
           is_premium?: boolean;
+          role?: UserRole | null;
+          onboarding_completed?: boolean;
+          organization?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -323,6 +333,7 @@ export interface Database {
     Enums: {
       answer_quality: 'best' | 'ok' | 'bad' | 'timeout';
       team_role: TeamRole;
+      user_role: UserRole;
     };
   };
 }

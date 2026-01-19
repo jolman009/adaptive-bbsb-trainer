@@ -12,6 +12,7 @@ import { ScenarioSelectPage } from '@/pages/ScenarioSelectPage';
 import { ProgressPage } from '@/pages/ProgressPage';
 import { LeaderboardPage } from '@/pages/LeaderboardPage';
 import { TeamsPage } from '@/pages/TeamsPage';
+import { OnboardingPage } from '@/pages/OnboardingPage';
 
 function App(): JSX.Element {
   useEffect(() => {
@@ -29,6 +30,16 @@ function App(): JSX.Element {
           <Route path="/welcome" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/preview" element={<ScenarioPreviewPage />} />
+
+          {/* Onboarding - protected but skip onboarding check */}
+          <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute skipOnboardingCheck>
+                <OnboardingPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Protected routes - with sidebar layout */}
           <Route

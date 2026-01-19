@@ -6,6 +6,8 @@ import {
   loadOrCreateSession,
   resetSession,
 } from './sessionService';
+import { refreshLeaderboardView } from './leaderboardService';
+import { refreshTeamLeaderboard } from './teamService';
 
 const SYNC_DEBOUNCE_MS = 2000; // 2 second debounce
 const LOCAL_STORAGE_KEY = 'adaptive-trainer-session';
@@ -130,6 +132,11 @@ class SyncService {
       if (changes.bestStreak !== undefined) {
         await updateBestStreak(this.sessionId, changes.bestStreak);
       }
+
+      // Refresh leaderboard views so changes appear immediately
+      // Run in background - don't block sync completion
+      refreshLeaderboardView().catch(console.error);
+      refreshTeamLeaderboard().catch(console.error);
     } catch (error) {
       console.error('Sync failed:', error);
       // Re-queue failed changes
