@@ -19,17 +19,25 @@ import {
   Alert,
   Chip,
   Avatar,
+  ToggleButton,
+  ToggleButtonGroup,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
-import { Trophy, Target, Flame, Award, RefreshCw } from 'lucide-react';
+import { Trophy, Target, Flame, Award, RefreshCw, Globe, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { LeaderboardEntry } from '@/types/supabase';
+import { LeaderboardEntry, TeamLeaderboardEntry, UserTeam } from '@/types/supabase';
 import {
   fetchLeaderboard,
   getUserRank,
   LeaderboardSortField,
 } from '@/services/leaderboardService';
+import { getUserTeams, getTeamLeaderboard } from '@/services/teamService';
 
 type TabValue = 'accuracy' | 'streaks' | 'mastered';
+type ViewMode = 'global' | 'teams';
 
 const TAB_TO_SORT: Record<TabValue, LeaderboardSortField> = {
   accuracy: 'accuracy_pct',
@@ -39,15 +47,37 @@ const TAB_TO_SORT: Record<TabValue, LeaderboardSortField> = {
 
 export const LeaderboardPage: React.FC = () => {
   const { user } = useAuth();
+  const [viewMode, setViewMode] = useState<ViewMode>('global');
   const [activeTab, setActiveTab] = useState<TabValue>('accuracy');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [teamEntries, setTeamEntries] = useState<TeamLeaderboardEntry[]>([]);
   const [userRank, setUserRank] = useState<{ rank: number; entry: LeaderboardEntry } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
-  const loadLeaderboard = async (sortField: LeaderboardSortField, pageNum: number, refresh: boolean = false) => {
+  // Team state
+  const [userTeams, setUserTeams] = useState<UserTeam[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [teamsLoading, setTeamsLoading] = useState(false);
+
+  // Load user teams on mount
+  useEffect(() => {
+    const loadTeams = async () => {
+      if (!user) return;
+      setTeamsLoading(true);
+      const teams = await getUserTeams(user.id);
+      setUserTeams(teams);
+      if (teams.length > 0 && !selectedTeamId && teams[0]) {
+        setSelectedTeamId(teams[0].team_id);
+      }
+      setTeamsLoading(false);
+    };
+    loadTeams();
+  }, [user]);
+
+  const loadGlobalLeaderboard = async (sortField: LeaderboardSortField, pageNum: number, refresh: boolean = false) => {
     setIsLoading(true);
     setError(null);
 
@@ -73,10 +103,52 @@ export const LeaderboardPage: React.FC = () => {
     }
   };
 
+  const loadTeamLeaderboard = async (teamId: string) => {
+    if (!teamId) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const data = await getTeamLeaderboard(teamId);
+
+      // Sort by the active tab field
+      const sorted = [...data].sort((a, b) => {
+        switch (activeTab) {
+          case 'accuracy':
+            return b.accuracy_pct - a.accuracy_pct;
+          case 'streaks':
+            return b.best_streak - a.best_streak;
+          case 'mastered':
+            return b.scenarios_mastered - a.scenarios_mastered;
+          default:
+            return 0;
+        }
+      });
+
+      setTeamEntries(sorted);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load team leaderboard');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load appropriate leaderboard when view/team/tab changes
   useEffect(() => {
     setPage(0);
-    loadLeaderboard(TAB_TO_SORT[activeTab], 0);
-  }, [activeTab, user]);
+    if (viewMode === 'global') {
+      loadGlobalLeaderboard(TAB_TO_SORT[activeTab], 0);
+    } else if (selectedTeamId) {
+      loadTeamLeaderboard(selectedTeamId);
+    }
+  }, [viewMode, activeTab, selectedTeamId, user]);
+
+  const handleViewModeChange = (_: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => {
+    if (newMode) {
+      setViewMode(newMode);
+    }
+  };
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: TabValue) => {
     setActiveTab(newValue);
@@ -85,12 +157,16 @@ export const LeaderboardPage: React.FC = () => {
   const handleLoadMore = () => {
     const nextPage = page + 1;
     setPage(nextPage);
-    loadLeaderboard(TAB_TO_SORT[activeTab], nextPage);
+    loadGlobalLeaderboard(TAB_TO_SORT[activeTab], nextPage);
   };
 
   const handleRefresh = () => {
     setPage(0);
-    loadLeaderboard(TAB_TO_SORT[activeTab], 0, true);
+    if (viewMode === 'global') {
+      loadGlobalLeaderboard(TAB_TO_SORT[activeTab], 0, true);
+    } else if (selectedTeamId) {
+      loadTeamLeaderboard(selectedTeamId);
+    }
   };
 
   const getRankDisplay = (rank: number) => {
@@ -100,7 +176,7 @@ export const LeaderboardPage: React.FC = () => {
     return rank;
   };
 
-  const getStatValue = (entry: LeaderboardEntry): string | number => {
+  const getStatValue = (entry: LeaderboardEntry | TeamLeaderboardEntry): string | number => {
     switch (activeTab) {
       case 'accuracy':
         return `${entry.accuracy_pct}%`;
@@ -126,31 +202,101 @@ export const LeaderboardPage: React.FC = () => {
     }
   };
 
+  const currentEntries = viewMode === 'global' ? entries : teamEntries;
+  const selectedTeam = userTeams.find((t) => t.team_id === selectedTeamId);
+
   return (
     <Box sx={{ maxWidth: 'lg', mx: 'auto' }}>
       {/* Page Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 600 }}>
             Leaderboard
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            See how you rank against other players.
+            {viewMode === 'global'
+              ? 'See how you rank against all players.'
+              : `Compete with your ${selectedTeam?.team_name || 'team'} members.`}
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<RefreshCw size={16} />}
-          onClick={handleRefresh}
-          disabled={isLoading}
-        >
-          Refresh
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={handleViewModeChange}
+            size="small"
+          >
+            <ToggleButton value="global" aria-label="global leaderboard">
+              <Globe size={16} style={{ marginRight: 6 }} />
+              Global
+            </ToggleButton>
+            <ToggleButton value="teams" aria-label="team leaderboards" disabled={userTeams.length === 0}>
+              <Users size={16} style={{ marginRight: 6 }} />
+              Teams
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<RefreshCw size={16} />}
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            Refresh
+          </Button>
+        </Stack>
       </Box>
 
-      {/* Current User Rank Card */}
-      {userRank && (
+      {/* Team Selector (when in teams mode) */}
+      {viewMode === 'teams' && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          {teamsLoading ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="textSecondary">
+                Loading your teams...
+              </Typography>
+            </Box>
+          ) : userTeams.length === 0 ? (
+            <Alert severity="info">
+              You are not a member of any teams yet. Join a team to see team leaderboards!
+            </Alert>
+          ) : (
+            <FormControl fullWidth size="small">
+              <InputLabel>Select Team</InputLabel>
+              <Select
+                value={selectedTeamId}
+                label="Select Team"
+                onChange={(e) => setSelectedTeamId(e.target.value)}
+              >
+                {userTeams.map((team) => (
+                  <MenuItem key={team.team_id} value={team.team_id}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Users size={16} />
+                      <span>{team.team_name}</span>
+                      <Chip
+                        label={`${team.member_count} members`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ ml: 1 }}
+                      />
+                      {team.user_role === 'owner' && (
+                        <Chip label="Owner" size="small" color="primary" />
+                      )}
+                      {team.user_role === 'admin' && (
+                        <Chip label="Admin" size="small" color="secondary" />
+                      )}
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </Paper>
+      )}
+
+      {/* Current User Rank Card (global only) */}
+      {viewMode === 'global' && userRank && (
         <Card sx={{ mb: 3, bgcolor: 'primary.50', border: 1, borderColor: 'primary.200' }}>
           <CardContent>
             <Stack direction="row" alignItems="center" spacing={3}>
@@ -166,7 +312,7 @@ export const LeaderboardPage: React.FC = () => {
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                   {userRank.entry.display_name || 'You'}
                 </Typography>
-                <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+                <Stack direction="row" spacing={2} sx={{ mt: 1 }} flexWrap="wrap">
                   <Chip
                     icon={<Target size={14} />}
                     label={`${userRank.entry.accuracy_pct}% Accuracy`}
@@ -231,29 +377,35 @@ export const LeaderboardPage: React.FC = () => {
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, width: 80 }}>Rank</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Player</TableCell>
+                {viewMode === 'teams' && (
+                  <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>
+                )}
                 <TableCell sx={{ fontWeight: 600, textAlign: 'right' }}>{getStatLabel()}</TableCell>
                 <TableCell sx={{ fontWeight: 600, textAlign: 'right' }}>Attempts</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {isLoading && entries.length === 0 ? (
+              {isLoading && currentEntries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} sx={{ textAlign: 'center', py: 6 }}>
+                  <TableCell colSpan={viewMode === 'teams' ? 5 : 4} sx={{ textAlign: 'center', py: 6 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
-              ) : entries.length === 0 ? (
+              ) : currentEntries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} sx={{ textAlign: 'center', py: 6 }}>
+                  <TableCell colSpan={viewMode === 'teams' ? 5 : 4} sx={{ textAlign: 'center', py: 6 }}>
                     <Typography color="textSecondary">
-                      No leaderboard entries yet. Complete at least 10 attempts to appear!
+                      {viewMode === 'global'
+                        ? 'No leaderboard entries yet. Complete at least 10 attempts to appear!'
+                        : 'No team members have completed enough drills yet. Team members need at least 5 attempts.'}
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                entries.map((entry, index) => {
-                  const rank = page * 50 + index + 1;
+                currentEntries.map((entry, index) => {
+                  const rank = viewMode === 'global' ? page * 50 + index + 1 : index + 1;
                   const isCurrentUser = user?.id === entry.user_id;
+                  const teamEntry = viewMode === 'teams' ? (entry as TeamLeaderboardEntry) : null;
 
                   return (
                     <TableRow
@@ -285,6 +437,22 @@ export const LeaderboardPage: React.FC = () => {
                           </Box>
                         </Stack>
                       </TableCell>
+                      {viewMode === 'teams' && teamEntry && (
+                        <TableCell>
+                          <Chip
+                            label={teamEntry.role}
+                            size="small"
+                            color={
+                              teamEntry.role === 'owner'
+                                ? 'primary'
+                                : teamEntry.role === 'admin'
+                                ? 'secondary'
+                                : 'default'
+                            }
+                            variant={teamEntry.role === 'member' ? 'outlined' : 'filled'}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell sx={{ textAlign: 'right' }}>
                         <Typography
                           variant="body2"
@@ -316,8 +484,8 @@ export const LeaderboardPage: React.FC = () => {
           </Table>
         </TableContainer>
 
-        {/* Load More */}
-        {hasMore && (
+        {/* Load More (global only) */}
+        {viewMode === 'global' && hasMore && (
           <Box sx={{ p: 2, textAlign: 'center', borderTop: 1, borderColor: 'divider' }}>
             <Button onClick={handleLoadMore} disabled={isLoading}>
               {isLoading ? 'Loading...' : 'Load More'}
@@ -328,7 +496,9 @@ export const LeaderboardPage: React.FC = () => {
 
       {/* Minimum Attempts Notice */}
       <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 2, textAlign: 'center' }}>
-        Players need at least 10 attempts to appear on the leaderboard.
+        {viewMode === 'global'
+          ? 'Players need at least 10 attempts to appear on the global leaderboard.'
+          : 'Team members need at least 5 attempts to appear on team leaderboards.'}
       </Typography>
     </Box>
   );

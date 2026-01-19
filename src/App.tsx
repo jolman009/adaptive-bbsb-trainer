@@ -11,6 +11,7 @@ import { ScenarioPreviewPage } from '@/pages/ScenarioPreviewPage';
 import { ScenarioSelectPage } from '@/pages/ScenarioSelectPage';
 import { ProgressPage } from '@/pages/ProgressPage';
 import { LeaderboardPage } from '@/pages/LeaderboardPage';
+import { TeamsPage } from '@/pages/TeamsPage';
 
 function App(): JSX.Element {
   useEffect(() => {
@@ -66,6 +67,16 @@ function App(): JSX.Element {
               <ProtectedRoute>
                 <Layout>
                   <LeaderboardPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teams"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <TeamsPage />
                 </Layout>
               </ProtectedRoute>
             }

@@ -13,6 +13,9 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+export type TeamRole = 'owner' | 'admin' | 'member';
+export type JoinRequestStatus = 'pending' | 'approved' | 'rejected';
+
 export interface Database {
   public: {
     Tables: {
@@ -22,6 +25,7 @@ export interface Database {
           email: string;
           display_name: string | null;
           avatar_url: string | null;
+          is_premium: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -30,6 +34,7 @@ export interface Database {
           email: string;
           display_name?: string | null;
           avatar_url?: string | null;
+          is_premium?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -38,6 +43,7 @@ export interface Database {
           email?: string;
           display_name?: string | null;
           avatar_url?: string | null;
+          is_premium?: boolean;
           updated_at?: string;
         };
         Relationships: [];
@@ -144,6 +150,115 @@ export interface Database {
           }
         ];
       };
+      teams: {
+        Row: {
+          id: string;
+          name: string;
+          code: string;
+          description: string | null;
+          owner_id: string;
+          max_members: number;
+          require_approval: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          code?: string;
+          description?: string | null;
+          owner_id: string;
+          max_members?: number;
+          require_approval?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          code?: string;
+          description?: string | null;
+          max_members?: number;
+          require_approval?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'teams_owner_id_fkey';
+            columns: ['owner_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      team_members: {
+        Row: {
+          id: string;
+          team_id: string;
+          user_id: string;
+          role: TeamRole;
+          joined_at: string;
+        };
+        Insert: {
+          id?: string;
+          team_id: string;
+          user_id: string;
+          role?: TeamRole;
+          joined_at?: string;
+        };
+        Update: {
+          role?: TeamRole;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'team_members_team_id_fkey';
+            columns: ['team_id'];
+            referencedRelation: 'teams';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'team_members_user_id_fkey';
+            columns: ['user_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      team_join_requests: {
+        Row: {
+          id: string;
+          team_id: string;
+          user_id: string;
+          status: JoinRequestStatus;
+          requested_at: string;
+          responded_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          team_id: string;
+          user_id: string;
+          status?: JoinRequestStatus;
+          requested_at?: string;
+          responded_at?: string | null;
+        };
+        Update: {
+          status?: JoinRequestStatus;
+          responded_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'team_join_requests_team_id_fkey';
+            columns: ['team_id'];
+            referencedRelation: 'teams';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'team_join_requests_user_id_fkey';
+            columns: ['user_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
     };
     Views: {
       leaderboard_stats: {
@@ -157,6 +272,20 @@ export interface Database {
         };
         Relationships: [];
       };
+      team_leaderboard_stats: {
+        Row: {
+          team_id: string;
+          user_id: string;
+          display_name: string | null;
+          accuracy_pct: number;
+          best_streak: number;
+          scenarios_mastered: number;
+          total_attempts: number;
+          role: TeamRole;
+          joined_at: string;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       update_session_aggregates: {
@@ -167,9 +296,33 @@ export interface Database {
         Args: Record<string, never>;
         Returns: void;
       };
+      refresh_team_leaderboard: {
+        Args: Record<string, never>;
+        Returns: void;
+      };
+      generate_team_code: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
+      get_user_teams: {
+        Args: { p_user_id: string };
+        Returns: {
+          team_id: string;
+          team_name: string;
+          team_code: string;
+          user_role: TeamRole;
+          member_count: number;
+          owner_name: string;
+        }[];
+      };
+      is_team_member: {
+        Args: { p_team_id: string; p_user_id: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       answer_quality: 'best' | 'ok' | 'bad' | 'timeout';
+      team_role: TeamRole;
     };
   };
 }
@@ -188,3 +341,30 @@ export type ScenarioProgressInsert = Database['public']['Tables']['scenario_prog
 export type ScenarioProgressUpdate = Database['public']['Tables']['scenario_progress']['Update'];
 
 export type LeaderboardEntry = Database['public']['Views']['leaderboard_stats']['Row'];
+export type TeamLeaderboardEntry = Database['public']['Views']['team_leaderboard_stats']['Row'];
+
+export type Team = Database['public']['Tables']['teams']['Row'];
+export type TeamInsert = Database['public']['Tables']['teams']['Insert'];
+export type TeamUpdate = Database['public']['Tables']['teams']['Update'];
+
+export type TeamMember = Database['public']['Tables']['team_members']['Row'];
+export type TeamMemberInsert = Database['public']['Tables']['team_members']['Insert'];
+export type TeamMemberUpdate = Database['public']['Tables']['team_members']['Update'];
+
+export type TeamJoinRequest = Database['public']['Tables']['team_join_requests']['Row'];
+export type TeamJoinRequestInsert = Database['public']['Tables']['team_join_requests']['Insert'];
+export type TeamJoinRequestUpdate = Database['public']['Tables']['team_join_requests']['Update'];
+
+// Composite types for UI
+export interface UserTeam {
+  team_id: string;
+  team_name: string;
+  team_code: string;
+  user_role: TeamRole;
+  member_count: number;
+  owner_name: string;
+}
+
+export interface TeamWithMembers extends Team {
+  members: (TeamMember & { profile: Profile })[];
+}

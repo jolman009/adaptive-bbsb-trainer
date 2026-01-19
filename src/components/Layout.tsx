@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Zap, BarChart3, Search, LogOut, Trophy, User } from 'lucide-react';
+import { Zap, BarChart3, Search, LogOut, Trophy, User, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { DiamondIQLogo } from './DiamondIQLogo';
 import { MigrationPrompt } from './MigrationPrompt';
@@ -33,7 +33,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: 'Scenarios', path: '/', icon: Search },
     { name: 'Training', path: '/drill', icon: Zap },
     { name: 'Progress', path: '/progress', icon: BarChart3 },
-    ...(isSupabaseConfigured ? [{ name: 'Leaderboard', path: '/leaderboard', icon: Trophy }] : []),
+    ...(isSupabaseConfigured ? [
+      { name: 'Leaderboard', path: '/leaderboard', icon: Trophy },
+      { name: 'Teams', path: '/teams', icon: Users },
+    ] : []),
   ];
 
   const handleLogout = () => {
